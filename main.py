@@ -1,3 +1,15 @@
+# This script demonstrates how to use LangChain to request a story from an
+# Ollama language model. It first loads environment variables from a .env file,
+# if available, and prints the installed langchain-core and langgraph versions.
+# The main function connects to the llama3.2:latest model through ChatOllama,
+# using a temperature of zero to reduce randomness in the generated response.
+# It asks the model to write approximately 500 words in French about a cat
+# learning to play the piano, then prints the returned message object.
+# Ollama must be running with the requested model available, and the required
+# Python packages must be installed. The story request runs only when this
+# file is executed directly; environment loading and version printing also
+# happen when the file is imported. Use response.content to print only the story.
+
 from dotenv import load_dotenv
 from importlib.metadata import version
 from langchain_ollama import ChatOllama
