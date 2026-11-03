@@ -129,7 +129,7 @@ def new_way():
 if __name__ == "__main__":
     # demo_basic_chain()
     # demo_batch_exectution()
-    # demo_streaming()
+    demo_streaming()
     # demo_schema_inspection()
     # exercise_first_chain()
-    new_way()
+    #new_way()
