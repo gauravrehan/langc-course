@@ -1,0 +1,30 @@
+{
+  "screens": [
+    {
+      "screenName": "Home",
+      "tools": [
+        {
+          "toolName": "delete_draft",
+          "displayName": "Delete Draft",
+          "description": "Delete a draft from the application.",
+          "triggerPhrases": [
+            "delete draft",
+            "delete my draft",
+            "remove draft",
+            "clear off draft",
+            "clear off the draft"
+          ],
+          "requiredParameters": [
+            {
+              "name": "draftId",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]+$",
+              "description": "The alphanumeric identifier of the draft to delete."
+            }
+          ],
+          "uiFunction": "delete_draft"
+        }
+      ]
+    }
+  ]
+}
