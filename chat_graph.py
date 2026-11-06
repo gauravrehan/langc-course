@@ -1,14 +1,22 @@
+import atexit
 import json
+import logging
+import os
 import re
 from pathlib import Path
 from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
-from langgraph.checkpoint.memory import InMemorySaver
+from dotenv import load_dotenv
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from pymongo import MongoClient
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
+
+load_dotenv()
 
 llm = init_chat_model(
     "llama3.2:latest", model_provider="ollama", temperature=0
@@ -453,7 +461,23 @@ builder.add_edge("unsupported", END)
 builder.add_edge("prepare_command", END)
 builder.add_edge("cancel", END)
 
-checkpointer = InMemorySaver()
+mongodb_uri = os.getenv("MONGODB_URI")
+if mongodb_uri:
+    mongo_client = MongoClient(
+        mongodb_uri,
+        serverSelectionTimeoutMS=int(os.getenv("MONGODB_TIMEOUT_MS", "5000")),
+    )
+    checkpointer = MongoDBSaver(
+        mongo_client,
+        db_name=os.getenv("MONGODB_DATABASE", "langgraph_chat"),
+    )
+    atexit.register(mongo_client.close)
+else:
+    logging.warning(
+        "MONGODB_URI is not configured; using an in-memory LangGraph checkpointer."
+    )
+    checkpointer = InMemorySaver()
+
 chat_graph = builder.compile(checkpointer=checkpointer)
 
 
