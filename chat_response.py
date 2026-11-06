@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,7 @@ class ChatResponse(BaseModel):
     serverResponse: str
     status: Literal[
         "provide_draft_id",
+        "provide_parameters",
         "confirm",
         "cancelled",
         "ready_to_execute",
@@ -19,6 +20,7 @@ class ChatResponse(BaseModel):
         "tool_unavailable",
     ] = "unsupported"
     pendingAction: str | None = None
-    pendingParameters: dict[str, str] | None = None
+    pendingParameters: dict[str, Any] | None = None
+    missingParameters: list[str] | None = None
     executeCommand: UICommand | None = None
     availableTools: list[AvailableTool] | None = None

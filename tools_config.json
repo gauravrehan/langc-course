@@ -19,6 +19,7 @@
               "name": "draftId",
               "type": "string",
               "pattern": "^[A-Za-z0-9]+$",
+              "aliases": ["draft id", "draft identifier"],
               "description": "The alphanumeric identifier of the draft to delete."
             }
           ],

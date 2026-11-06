@@ -37,6 +37,7 @@ def _to_response(session_id: UUID, result: dict) -> ChatResponse:
             serverResponse=interrupt_data["message"],
             pendingAction=interrupt_data.get("action"),
             pendingParameters=interrupt_data.get("parameters"),
+            missingParameters=interrupt_data.get("missingParameters"),
             availableTools=values.get("available_tools"),
         )
 
@@ -123,8 +124,9 @@ def continue_chat_endpoint(
 #   GET /chat/<session-id>
 # Sample response while waiting for the draft ID:
 #   {"sessionId": "<same-session-uuid>",
-#    "serverResponse": "What is the draft ID? It must contain only letters and numbers.",
+#    "serverResponse": "Please provide the missing information: draftId: The alphanumeric identifier of the draft to delete.",
 #    "status": "provide_draft_id",
+#    "missingParameters": ["draftId"],
 #    "pendingAction": null,
 #    "pendingParameters": null,
 #    "executeCommand": null}
@@ -144,6 +146,7 @@ def get_chat_endpoint(session_id: UUID) -> ChatResponse:
             serverResponse=interrupt_data["message"],
             pendingAction=interrupt_data.get("action"),
             pendingParameters=interrupt_data.get("parameters"),
+            missingParameters=interrupt_data.get("missingParameters"),
         )
 
     return ChatResponse(

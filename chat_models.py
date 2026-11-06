@@ -17,7 +17,7 @@ class ChatMessageRequest(BaseModel):
 class UICommand(BaseModel):
     tool: str
     functionName: str
-    parameters: dict[str, str]
+    parameters: dict[str, Any]
 
 
 class ToolParameterInfo(BaseModel):
