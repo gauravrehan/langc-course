@@ -1,0 +1,21 @@
+flowchart TD
+    START --> identify_tool
+
+    identify_tool -->|Supported tool found| parse_parameters
+    identify_tool -->|No matching tool| unsupported
+    unsupported --> END
+
+    parse_parameters --> decide_next_step
+
+    decide_next_step -->|Required fields missing| collect_missing_parameters
+    decide_next_step -->|All required fields present| confirm
+
+    collect_missing_parameters -->|Interrupt: ask user; LLM extracts reply| decide_next_step
+
+    confirm -->|Interrupt: ask user to approve| classify_confirmation
+    classify_confirmation -->|Confirmed| prepare_command
+    classify_confirmation -->|Rejected| cancel
+    classify_confirmation -->|Unclear: ask again| confirm
+
+    prepare_command --> END
+    cancel --> END
