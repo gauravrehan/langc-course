@@ -24,12 +24,12 @@ llm = init_chat_model(
 
 
 class ToolSelection(BaseModel):
-    matched: bool = Field(
-        description="True only when the user clearly requests an available action."
-    )
     toolName: str | None = Field(
         default=None,
-        description="An exact toolName from the available list, or null if none matches.",
+        description=(
+            "The exact toolName from the available list that matches the user's "
+            "intended action, or null if none matches."
+        ),
     )
     confidence: float = Field(ge=0, le=1)
 
@@ -43,9 +43,21 @@ tool_selector = llm.with_structured_output(ToolSelection, method="json_schema")
 confirmation_classifier = llm.with_structured_output(
     ConfirmationInterpretation, method="json_schema"
 )
-TOOLS_CONFIG = json.loads(
-    Path(__file__).with_name("tools_config.json").read_text(encoding="utf-8")
-)
+TOOLS_CONFIG_PATH = Path(__file__).with_name("tools_config.json")
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    log_handler = logging.StreamHandler()
+    log_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    logger.addHandler(log_handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+
+def load_tools_config() -> dict[str, Any]:
+    """Load the current tool configuration from disk."""
+    return json.loads(TOOLS_CONFIG_PATH.read_text(encoding="utf-8"))
 
 
 class ChatState(TypedDict, total=False):
@@ -75,8 +87,45 @@ def _read_message(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _parameter_is_missing(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _log_llm_request(phase: str, messages: list[tuple[str, Any]]) -> None:
+    request = [
+        {"role": role, "content": content}
+        for role, content in messages
+    ]
+    logger.info(
+        "LLM request [%s]: %s",
+        phase,
+        json.dumps(request, ensure_ascii=False, default=str),
+    )
+
+
+def _log_llm_response(phase: str, response: Any) -> None:
+    if isinstance(response, BaseModel):
+        response_data = response.model_dump()
+    elif hasattr(response, "content"):
+        response_data = response.content
+    else:
+        response_data = response
+    logger.info(
+        "LLM response [%s]: %s",
+        phase,
+        json.dumps(response_data, ensure_ascii=False, default=str),
+    )
+
+
 def _invoke_json(system_prompt: str, human_prompt: str) -> dict[str, Any]:
-    response = llm.invoke([("system", system_prompt), ("human", human_prompt)])
+    messages = [("system", system_prompt), ("human", human_prompt)]
+    _log_llm_request("next_step", messages)
+    try:
+        response = llm.invoke(messages)
+    except Exception:
+        logger.exception("LLM request failed while deciding the next graph step")
+        raise
+    _log_llm_response("next_step", response)
     content = response.content
     if not isinstance(content, str):
         content = str(content)
@@ -92,10 +141,11 @@ def _invoke_json(system_prompt: str, human_prompt: str) -> dict[str, Any]:
 
 def identify_tool(state: ChatState) -> dict[str, Any]:
     """Ask the LLM to select only from the tools configured for this screen."""
+    tools_config = load_tools_config()
     screen_configuration = next(
         (
             screen
-            for screen in TOOLS_CONFIG["screens"]
+            for screen in tools_config["screens"]
             if screen["screenName"] == state["screen_name"]
         ),
         None,
@@ -118,67 +168,85 @@ def identify_tool(state: ChatState) -> dict[str, Any]:
             "displayName": tool["displayName"],
             "description": tool["description"],
             "intentExamples": tool.get("intentExamples", []),
-            "requiredParameters": tool.get("requiredParameters", []),
         }
         for tool in available_tools
     ]
-    try:
-        selection = tool_selector.invoke(
-            [
-                (
-                    "system",
-                    "Interpret the user's full natural-language request and decide "
-                    "whether its intended action matches one of the available tools. "
-                    "Use semantic meaning, not exact keyword matching. Select only "
-                    "an exact toolName from the supplied list. Do not assume the only "
-                    "listed tool is intended. Greetings, small talk, general questions, "
-                    "unrelated requests, and requests that merely mention the same "
-                    "subject are not tool requests. Examples: 'hi' => matched=false, "
-                    "toolName=null; 'resubmit drafts' => no match for delete_draft; "
-                    "'clear off the draft' and 'delete my draft id AB231D' => "
-                    "delete_draft. If uncertain, use matched=false and toolName=null. "
+    prompt = [
+        (
+            "system",
+                    "Identify the action the user wants and choose the matching "
+                    "configured tool. Each tool's intentExamples are positive examples: "
+                    "a request with the same meaning should select that tool, even if "
+                    "the wording differs. Use the description to understand the action. "
+                    "Missing required details do not prevent selecting a tool; the "
+                    "graph will collect them afterward. Return the exact toolName "
+                    "from the supplied list. Return toolName=null only when none of "
+                    "the configured tools matches the requested action, such as for "
+                    "greetings, general questions, or unrelated requests. "
                     "Return confidence from 0 to 1.",
-                ),
-                (
-                    "human",
-                    "Current screen: "
-                    + state["screen_name"]
-                    + "\nUser query:\n"
-                    + state["query"]
-                    + "\nUser context:\n"
-                    + json.dumps(state.get("user_context") or {}, default=str)
-                    + "\nScreen context:\n"
-                    + json.dumps(state.get("screen_context") or {}, default=str)
-                    + "\nAvailable tools on this screen:\n"
-                    + json.dumps(tool_options),
-                ),
-            ]
-        )
+        ),
+        (
+            "human",
+            "Current screen: "
+            + state["screen_name"]
+            + "\nUser query:\n"
+            + state["query"]
+            + "\nUser context:\n"
+            + json.dumps(state.get("user_context") or {}, default=str)
+            + "\nScreen context:\n"
+            + json.dumps(state.get("screen_context") or {}, default=str)
+                    + "\nAvailable tools on this screen. Each intentExamples list "
+                    "contains positive matches for that tool:\n"
+            + json.dumps(tool_options),
+        ),
+    ]
+    _log_llm_request("tool_selection", prompt)
+    try:
+        selection = tool_selector.invoke(prompt)
     except Exception:
-        selection = None
+        logger.exception(
+            "Tool selection failed for screen %r", state["screen_name"]
+        )
+        return {
+            "tool": None,
+            "status": "tool_unavailable",
+            "message": (
+                "I couldn't reach the language model to identify the requested "
+                "action. Please try again."
+            ),
+            "available_tools": available_tools,
+        }
+    _log_llm_response("tool_selection", selection)
 
     if isinstance(selection, ToolSelection):
         selected_name = selection.toolName
-        is_confident_match = selection.matched and selection.confidence >= 0.8
+        confidence = selection.confidence
     elif isinstance(selection, dict):
         selected_name = selection.get("toolName")
-        is_confident_match = (
-            selection.get("matched") is True
-            and isinstance(selection.get("confidence"), (int, float))
-            and selection["confidence"] >= 0.8
-        )
+        confidence = selection.get("confidence")
     else:
         selected_name = None
-        is_confident_match = False
+        confidence = None
 
-    if not is_confident_match:
-        selected_name = None
-
+    logger.info(
+        "Tool selection for screen %r: toolName=%r confidence=%r",
+        state["screen_name"],
+        selected_name,
+        confidence,
+    )
+    normalized_selection = (
+        " ".join(re.findall(r"[a-z0-9]+", selected_name.casefold()))
+        if isinstance(selected_name, str)
+        else ""
+    )
     available_tool = next(
         (
             tool
             for tool in available_tools
-            if tool["toolName"] == selected_name
+            if normalized_selection
+            == " ".join(re.findall(r"[a-z0-9]+", tool["toolName"].casefold()))
+            or normalized_selection
+            == " ".join(re.findall(r"[a-z0-9]+", tool["displayName"].casefold()))
         ),
         None,
     )
@@ -246,11 +314,18 @@ def _extract_configured_parameters(
         ),
         ("human", evidence),
     ]
+    _log_llm_request("parameter_extraction", prompt)
     try:
         result = model.invoke(prompt)
         extracted = result.model_dump() if isinstance(result, BaseModel) else result
     except Exception:
+        logger.exception(
+            "LLM request failed while extracting configured parameters: %s",
+            [parameter["name"] for parameter in parameters],
+        )
         extracted = {}
+    else:
+        _log_llm_response("parameter_extraction", result)
     if not isinstance(extracted, dict):
         extracted = {}
 
@@ -260,6 +335,8 @@ def _extract_configured_parameters(
         value = extracted.get(name)
         if isinstance(value, str):
             value = value.strip()
+            if not value:
+                value = None
         if value is not None:
             value_text = str(value)
             pattern = parameter.get("pattern")
@@ -289,7 +366,7 @@ def decide_next_step(state: ChatState) -> dict[str, Any]:
     missing = [
         parameter["name"]
         for parameter in required_parameters
-        if parameter_values.get(parameter["name"]) is None
+        if _parameter_is_missing(parameter_values.get(parameter["name"]))
     ]
     recommendation = _invoke_json(
         "Decide the next conversational step for the selected tool. Choose "
@@ -338,7 +415,11 @@ def route_after_next_step(
 
 def unsupported(state: ChatState) -> dict[str, Any]:
     return {
-        "status": "unsupported",
+        "status": (
+            "tool_unavailable"
+            if state.get("status") == "tool_unavailable"
+            else "unsupported"
+        ),
         "message": state["message"],
         "available_tools": state.get("available_tools", []),
     }
@@ -350,7 +431,7 @@ def collect_missing_parameters(state: ChatState) -> dict[str, Any]:
     missing_parameters = [
         parameter
         for parameter in required_parameters
-        if parameters.get(parameter["name"]) is None
+        if _parameter_is_missing(parameters.get(parameter["name"]))
     ]
     if not missing_parameters:
         return {"parameters": parameters, "parameter_feedback": ""}
@@ -418,30 +499,36 @@ def request_confirmation(state: ChatState) -> dict[str, str]:
 
 def classify_confirmation(state: ChatState) -> dict[str, Any]:
     parameters = state.get("parameters") or {}
+    prompt = [
+        (
+            "system",
+            "Interpret the user's latest reply to this pending action "
+            "confirmation. Classify it as confirmed only when the user "
+            "clearly and affirmatively authorizes the exact action. "
+            "Classify a clear refusal or cancellation as rejected. Treat "
+            "silence, unrelated messages, questions, uncertainty, "
+            "conditional replies, or anything ambiguous as unclear. "
+            "Never infer approval from the fact that the user continued "
+            "the conversation. Return a confidence from 0 to 1.",
+        ),
+        (
+            "human",
+            f"Pending action: {state['tool_config']['displayName']}\n"
+            f"Parameters: {json.dumps(parameters)}\n"
+            f"User reply: {state.get('confirmation_reply', '')}",
+        ),
+    ]
+    _log_llm_request("confirmation_classification", prompt)
     try:
-        interpretation = confirmation_classifier.invoke(
-            [
-                (
-                    "system",
-                    "Interpret the user's latest reply to this pending action "
-                    "confirmation. Classify it as confirmed only when the user "
-                    "clearly and affirmatively authorizes the exact action. "
-                    "Classify a clear refusal or cancellation as rejected. Treat "
-                    "silence, unrelated messages, questions, uncertainty, "
-                    "conditional replies, or anything ambiguous as unclear. "
-                    "Never infer approval from the fact that the user continued "
-                    "the conversation. Return a confidence from 0 to 1.",
-                ),
-                (
-                    "human",
-                    f"Pending action: {state['tool_config']['displayName']}\n"
-                    f"Parameters: {json.dumps(parameters)}\n"
-                    f"User reply: {state.get('confirmation_reply', '')}",
-                ),
-            ]
-        )
+        interpretation = confirmation_classifier.invoke(prompt)
     except Exception:
+        logger.exception(
+            "LLM request failed while classifying confirmation for tool %r",
+            state.get("tool"),
+        )
         interpretation = None
+    else:
+        _log_llm_response("confirmation_classification", interpretation)
 
     if (
         isinstance(interpretation, ConfirmationInterpretation)

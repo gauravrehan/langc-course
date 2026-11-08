@@ -24,6 +24,49 @@
             }
           ],
           "uiFunction": "delete_draft"
+        },
+        {
+          "toolName": "create_request",
+          "displayName": "Create Request",
+          "description": "Creates a new request or ticket in the system.",
+          "intentExamples": [
+            "create a new request",
+            "create a request for an event",
+            "open a new ticket for an event"
+          ],
+          "requiredParameters": [
+            {
+              "name": "eventName",
+              "type": "string",
+              "description": "The name of the event."
+            },
+            {
+              "name": "eventDescription",
+              "type": "string",
+              "description": "A description of the event."
+            },
+            {
+              "name": "eventDate",
+              "type": "string",
+              "description": "The event date, preserving the format provided by the user."
+            },
+            {
+              "name": "eventCity",
+              "type": "string",
+              "description": "The city where the event will take place."
+            },
+            {
+              "name": "eventCountry",
+              "type": "string",
+              "description": "The country where the event will take place."
+            },
+            {
+              "name": "primarySpeaker",
+              "type": "string",
+              "description": "The primary speaker's name or person identifier."
+            }
+          ],
+          "uiFunction": "create_request"
         }
       ]
     }

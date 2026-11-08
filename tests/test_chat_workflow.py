@@ -1,6 +1,7 @@
 """Offline unit tests for the chat graph's interrupt and resume workflow."""
 
 import json
+import logging
 import os
 import re
 from types import SimpleNamespace
@@ -24,9 +25,12 @@ from langgraph.types import Command  # noqa: E402
 
 
 class _FakeSelector:
+    def __init__(self, tool_name="delete_draft"):
+        self.tool_name = tool_name
+
     def invoke(self, _messages):
         return chat_graph.ToolSelection(
-            matched=True, toolName="delete_draft", confidence=0.99
+            toolName=self.tool_name, confidence=0.99
         )
 
 
@@ -79,6 +83,10 @@ class _FakeConfirmationClassifier:
 
 class ChatWorkflowTests(TestCase):
     def setUp(self):
+        old_log_level = chat_graph.logger.level
+        chat_graph.logger.setLevel(logging.WARNING)
+        self.addCleanup(chat_graph.logger.setLevel, old_log_level)
+
         self.patches = [
             patch.object(chat_graph, "tool_selector", _FakeSelector()),
             patch.object(chat_graph, "llm", _FakeLLM()),
@@ -161,6 +169,40 @@ class ChatWorkflowTests(TestCase):
             )
 
         self.assertIsNone(extracted["draftId"])
+
+    def test_empty_llm_values_remain_missing(self):
+        class PartialExtractor:
+            def __init__(self, schema):
+                self.schema = schema
+
+            def invoke(self, _messages):
+                return self.schema.model_validate(
+                    {
+                        "eventName": "Pitch Book for Goldman Sachs",
+                        "eventDescription": "",
+                    }
+                )
+
+        class PartialLLM:
+            def with_structured_output(self, schema, **_kwargs):
+                return PartialExtractor(schema)
+
+        required_parameters = [
+            {"name": "eventName", "type": "string", "description": "Event name."},
+            {
+                "name": "eventDescription",
+                "type": "string",
+                "description": "Event description.",
+            },
+        ]
+        with patch.object(chat_graph, "llm", PartialLLM()):
+            extracted = chat_graph._extract_configured_parameters(
+                required_parameters,
+                "can you create a new request with eventName Pitch book for Goldman Sachs?",
+            )
+
+        self.assertEqual(extracted["eventName"], "Pitch Book for Goldman Sachs")
+        self.assertIsNone(extracted["eventDescription"])
 
     def test_unclear_confirmation_reprompts_until_user_confirms(self):
         chat_graph.confirmation_classifier = _FakeConfirmationClassifier(
@@ -256,6 +298,19 @@ class ChatWorkflowTests(TestCase):
         self.assertEqual(
             completed.executeCommand.parameters, {"draftId": "XSSD1231"}
         )
+
+    def test_create_request_tool_is_selected_from_config(self):
+        chat_graph.tool_selector = _FakeSelector("create_request")
+        result = chat_graph.identify_tool(
+            {
+                "query": "can you create a new request?",
+                "screen_name": "Home",
+                "user_context": None,
+                "screen_context": None,
+            }
+        )
+
+        self.assertEqual(result["tool"], "create_request")
 
 
 if __name__ == "__main__":
