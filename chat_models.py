@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,8 @@ class ToolParameterInfo(BaseModel):
     name: str
     type: str
     pattern: str | None = None
+    items: dict[str, Any] | None = None
+    evidenceMatch: Literal["exact", "loose", "none"] | None = None
     description: str
 
 

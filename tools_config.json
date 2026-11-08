@@ -14,13 +14,22 @@
             "clear off draft",
             "clear off the draft"
           ],
+          "negativeExamples": [
+            "delete my request",
+            "cancel a ticket",
+            "delete an event"
+          ],
           "requiredParameters": [
             {
               "name": "draftId",
               "type": "string",
               "pattern": "^[A-Za-z0-9]+$",
-              "aliases": ["draft id", "draft identifier"],
-              "description": "The alphanumeric identifier of the draft to delete."
+              "aliases": [
+                "draft id",
+                "draft identifier"
+              ],
+              "description": "The alphanumeric identifier of the draft to delete.",
+              "evidenceMatch": "exact"
             }
           ],
           "uiFunction": "delete_draft"
@@ -34,6 +43,11 @@
             "create a request for an event",
             "open a new ticket for an event"
           ],
+          "negativeExamples": [
+            "create a draft",
+            "delete a request",
+            "show my requests"
+          ],
           "requiredParameters": [
             {
               "name": "eventName",
@@ -43,7 +57,8 @@
             {
               "name": "eventDescription",
               "type": "string",
-              "description": "A description of the event."
+              "description": "A description of the event.",
+              "evidenceMatch": "none"
             },
             {
               "name": "eventDate",
@@ -64,6 +79,20 @@
               "name": "primarySpeaker",
               "type": "string",
               "description": "The primary speaker's name or person identifier."
+            },
+            {
+              "name": "eventSecurityList",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "aliases": [
+                "securities",
+                "companies",
+                "security list",
+                "tickers"
+              ],
+              "description": "The companies or securities associated with the event, as a list of names written exactly as the user gave them (for example: Microsoft Corp, SpaceX, 1Password)."
             }
           ],
           "uiFunction": "create_request"

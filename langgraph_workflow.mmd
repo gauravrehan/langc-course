@@ -2,7 +2,9 @@ flowchart TD
     START --> identify_tool
 
     identify_tool -->|Supported tool found| parse_parameters
+    identify_tool -->|Low confidence| clarify_tool
     identify_tool -->|No matching tool| unsupported
+    clarify_tool -->|Interrupt: ask user which action| identify_tool
     unsupported --> END
 
     parse_parameters --> decide_next_step
@@ -10,12 +12,18 @@ flowchart TD
     decide_next_step -->|Required fields missing| collect_missing_parameters
     decide_next_step -->|All required fields present| confirm
 
-    collect_missing_parameters -->|Interrupt: ask user; LLM extracts reply| decide_next_step
+    collect_missing_parameters -->|Interrupt: ask user; LLM extracts values or corrections| decide_next_step
+    collect_missing_parameters -->|User cancels| cancel
+    collect_missing_parameters -->|User wants a different action| identify_tool
+    collect_missing_parameters -->|Too many unusable replies| give_up
 
     confirm -->|Interrupt: ask user to approve| classify_confirmation
     classify_confirmation -->|Confirmed| prepare_command
     classify_confirmation -->|Rejected| cancel
+    classify_confirmation -->|Modify values| decide_next_step
     classify_confirmation -->|Unclear: ask again| confirm
+    classify_confirmation -->|Too many unclear replies| give_up
 
     prepare_command --> END
     cancel --> END
+    give_up --> END

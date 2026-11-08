@@ -13,6 +13,7 @@ class ChatResponse(BaseModel):
     status: Literal[
         "provide_draft_id",
         "provide_parameters",
+        "clarify_action",
         "confirm",
         "cancelled",
         "ready_to_execute",
