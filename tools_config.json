@@ -7,7 +7,7 @@
           "toolName": "delete_draft",
           "displayName": "Delete Draft",
           "description": "Delete a draft from the application.",
-          "triggerPhrases": [
+          "intentExamples": [
             "delete draft",
             "delete my draft",
             "remove draft",

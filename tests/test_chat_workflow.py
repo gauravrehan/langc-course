@@ -134,6 +134,34 @@ class ChatWorkflowTests(TestCase):
         self.assertEqual(prompt["kind"], "confirm_action")
         self.assertEqual(prompt["parameters"], {"draftId": "IAB33129"})
 
+    def test_alias_does_not_extract_value_without_llm_result(self):
+        class EmptyExtractor:
+            def __init__(self, schema):
+                self.schema = schema
+
+            def invoke(self, _messages):
+                return self.schema.model_validate({"draftId": None})
+
+        class EmptyLLM:
+            def with_structured_output(self, schema, **_kwargs):
+                return EmptyExtractor(schema)
+
+        required_parameters = [
+            {
+                "name": "draftId",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]+$",
+                "aliases": ["draft id", "draft identifier"],
+                "description": "The draft to delete.",
+            }
+        ]
+        with patch.object(chat_graph, "llm", EmptyLLM()):
+            extracted = chat_graph._extract_configured_parameters(
+                required_parameters, "draft id XSSD1231"
+            )
+
+        self.assertIsNone(extracted["draftId"])
+
     def test_unclear_confirmation_reprompts_until_user_confirms(self):
         chat_graph.confirmation_classifier = _FakeConfirmationClassifier(
             "unclear", "confirmed"

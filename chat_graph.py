@@ -117,7 +117,7 @@ def identify_tool(state: ChatState) -> dict[str, Any]:
             "toolName": tool["toolName"],
             "displayName": tool["displayName"],
             "description": tool["description"],
-            "triggerPhrases": tool.get("triggerPhrases", []),
+            "intentExamples": tool.get("intentExamples", []),
             "requiredParameters": tool.get("requiredParameters", []),
         }
         for tool in available_tools
@@ -267,8 +267,6 @@ def _extract_configured_parameters(
                 value = None
             elif not _value_is_explicit(value_text, evidence, bool(pattern)):
                 value = None
-        if value is None:
-            value = _fallback_parameter_value(parameter, evidence)
         parsed[name] = value
     return parsed
 
@@ -281,41 +279,6 @@ def _value_is_explicit(value: str, evidence: str, token: bool) -> bool:
             )
         )
     return value.casefold() in evidence.casefold()
-
-
-def _fallback_parameter_value(
-    parameter: dict[str, Any], evidence: str
-) -> Any:
-    """Recover labelled values after LLM extraction, without partial ID matches."""
-    aliases = parameter.get("aliases", [])
-    pattern = parameter.get("pattern")
-    for alias in aliases:
-        match = re.search(
-            rf"\b{re.escape(alias)}\b\s*(?:is|:|=|#)?\s*([^\s,!?;]+)",
-            evidence,
-            re.IGNORECASE,
-        )
-        if not match:
-            continue
-        value = match.group(1).rstrip(".,:)]}\"'")
-        if pattern and not re.fullmatch(pattern, value):
-            continue
-        value_type = parameter.get("type", "string")
-        try:
-            if value_type == "integer":
-                return int(value)
-            if value_type == "number":
-                return float(value)
-            if value_type == "boolean":
-                if value.casefold() in {"true", "yes"}:
-                    return True
-                if value.casefold() in {"false", "no"}:
-                    return False
-                continue
-        except ValueError:
-            continue
-        return value
-    return None
 
 
 def decide_next_step(state: ChatState) -> dict[str, Any]:
