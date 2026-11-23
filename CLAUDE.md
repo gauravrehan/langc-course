@@ -15,6 +15,10 @@ uv run python -m unittest tests.test_chat_workflow.ChatWorkflowTests.test_eviden
 
 There is no linter or formatter configured.
 
+## Secrets
+
+`.env` holds confidential values (e.g. `MONGODB_URI` credentials). Never stage, commit or push it: do not use `git add .`, `git add -A` or `git commit -a`; stage files by name and check `git status` before committing. Do not copy its values into code, docs, tests, commit messages or logs.
+
 ## Architecture
 
 A FastAPI service that turns a natural-language request from a web app screen into a confirmed UI command. The server never executes actions itself: the final output is an `executeCommand` (`tool`, `functionName`, `parameters`) that the front end runs.
