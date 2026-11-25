@@ -1,0 +1,96 @@
+{
+  "gates": {
+    "RM": {
+      "displayName": "Research Management",
+      "group": "research-pat-rm",
+      "backup": "research-pat-rm-leads"
+    },
+    "SA": {
+      "displayName": "Supervisory Analyst",
+      "group": "research-pat-sa",
+      "backup": "research-pat-sa-leads"
+    },
+    "CG": {
+      "displayName": "Control Group",
+      "group": "research-pat-cg",
+      "backup": "research-pat-cg-leads"
+    },
+    "CC": {
+      "displayName": "Corporate Communications",
+      "group": "research-pat-cc",
+      "backup": "research-pat-cc-leads"
+    }
+  },
+  "gatePaths": {
+    "default": ["RM", "SA", "CG"],
+    "media": ["RM", "SA", "CG", "CC"]
+  },
+  "regions": {
+    "AMER": {"timezone": "America/New_York", "cities": ["New York", "Toronto", "Chicago"]},
+    "EMEA": {"timezone": "Europe/London", "cities": ["London", "Frankfurt", "Paris"]},
+    "APAC": {"timezone": "Asia/Hong_Kong", "cities": ["Hong Kong", "Singapore", "Tokyo"]}
+  },
+  "coverage": {
+    "workdays": [0, 1, 2, 3, 4],
+    "startHour": 8,
+    "endHour": 19
+  },
+  "queueLoad": {
+    "mediumAt": 3,
+    "highAt": 6
+  },
+  "healthBands": {
+    "onTrack": 0.8,
+    "atRisk": 0.5
+  },
+  "lastMinuteHours": 3,
+  "lateSubmissionHours": 48,
+  "monteCarloSamples": 2000,
+  "similarCases": 25,
+  "agent": {
+    "maxToolSteps": 4,
+    "maxUnclearConfirmations": 2
+  },
+  "monitorActions": [
+    {
+      "id": "none",
+      "label": "No action",
+      "description": "Take no action; the PAT is progressing normally or an alert would add noise."
+    },
+    {
+      "id": "notify_submitter",
+      "label": "Notify submitter",
+      "description": "Tell the submitter the PAT is at risk, which gate is blocking it and what they can do.",
+      "audience": "submitter",
+      "cooldownHours": 6
+    },
+    {
+      "id": "nudge_approval_group",
+      "label": "Nudge approval group",
+      "description": "Send a reminder to the blocking approval group's mailbox that a time-sensitive PAT is waiting.",
+      "audience": "approval_group",
+      "cooldownHours": 4,
+      "respectsCoverage": true
+    },
+    {
+      "id": "escalate_to_backup",
+      "label": "Escalate to backup",
+      "description": "Escalate to the blocking group's backup contacts. Only for critical PATs; a person must confirm first.",
+      "audience": "backup",
+      "cooldownHours": 12,
+      "requiresConfirmation": true,
+      "requiresHealth": "critical",
+      "maxPerPat": 2
+    }
+  ],
+  "advisorActions": [
+    {"id": "submit_now", "phase": "before_submit", "label": "Submit as soon as possible", "description": "Every hour of lead time increases the chance all gates finish before the event."},
+    {"id": "verify_event_details", "phase": "before_submit", "label": "Verify event details", "description": "Check event time, time zone, venue and speaker so reviewers don't send it back."},
+    {"id": "confirm_disclosures", "phase": "before_submit", "label": "Confirm disclosures", "description": "Make sure all required disclosures are attached before submitting."},
+    {"id": "review_securities", "phase": "before_submit", "label": "Review securities and issuers", "description": "Check the list of securities, issuers and sovereign entities is complete and accurate; these drive Control Group review time."},
+    {"id": "trim_scope", "phase": "before_submit", "label": "Narrow the scope", "description": "If some securities or entities are not essential to the appearance, removing them can shorten review."},
+    {"id": "enable_monitoring", "phase": "after_submit", "label": "Enable monitoring", "description": "Turn on Approval Intelligence alerts for this PAT."},
+    {"id": "contact_cg_early", "phase": "after_submit", "label": "Give Control Group a heads-up", "description": "Let the Control Group mailbox know a time-sensitive PAT is coming."},
+    {"id": "watch_reviewer_questions", "phase": "after_submit", "label": "Respond quickly to reviewer questions", "description": "Reply to reviewer questions the same day to avoid losing queue position."}
+  ]
+}

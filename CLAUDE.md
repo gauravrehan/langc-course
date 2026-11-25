@@ -11,6 +11,7 @@ uv sync                                         # install deps
 uv run uvicorn chat:app --reload                # run the API
 uv run python -m unittest discover -s tests     # run all tests (offline, no LLM/Mongo needed)
 uv run python -m unittest tests.test_chat_workflow.ChatWorkflowTests.test_evidence_modes   # single test
+uv run python -m pat.seed                       # load synthetic PAT data into MongoDB (--in-flight-only to refresh demo PATs)
 ```
 
 There is no linter or formatter configured.
@@ -34,6 +35,20 @@ A FastAPI service that turns a natural-language request from a web app screen in
 - A single module-level `llm` (`init_chat_model("llama3.2:latest", model_provider="ollama")`) is used only via `with_structured_output(..., method="json_schema")`. Tool selection builds a dynamic Pydantic schema whose `toolName` is a `Literal` of only that screen's tools (`_build_tool_selector`). Confirmation replies go through `confirmation_classifier`.
 - Extracted parameter values are not trusted as-is. `_validate_values` checks each against `pattern` and against the user's own text, using `evidenceMatch`: `exact` (verbatim token; the default when a `pattern` is set), `loose` (same words in order; the default otherwise), or `none` (paraphrase allowed). Only the user's reply text counts as evidence, never the server's question, so the LLM cannot pick up values from the prompt.
 - `decide_next_step` is deterministic (no LLM call). Retry and threshold limits are constants at the top of `chat_graph.py` (`TOOL_CONFIDENCE_THRESHOLD`, `MAX_FAILED_PARAMETER_REPLIES`, `MAX_UNCLEAR_CONFIRMATIONS`, `MAX_FIELDS_PER_PROMPT`, etc.).
+
+## PAT AI Intelligence prototype (`pat/`)
+
+A second feature on the same app, mounted at `/pat` by `chat.py` (`app.include_router(pat_router)`). Design and milestones: `docs/pat_prototype_plan.md`. All PAT data is synthetic (`pat/data.py`); never add real PAT records.
+
+- **Rule:** LLM nodes reason and write; code computes every number and checks every LLM output. Keep it that way.
+- `predict.py`: no LLM. Gate durations from history grouped by gate/event type/time bucket/queue load/complexity, matched on hours-to-event; Monte Carlo over remaining gates. Terminated PATs are kept as censored samples; dropping them makes stuck PATs look safe.
+- `advisor_graph.py` (Submission Advisor, single pass, no checkpointer) and `monitor_graph.py` (Approval Intelligence Agent, one thread per PAT, `thread_id = "pat:<id>"`, shares the chat checkpointer). Graph dependencies (`PatContext`: repository, prediction model, notifier) come through LangGraph runtime context, not state, so they are never checkpointed. Each tick resets per-run state fields in `start_tick`.
+- `guards.py`: LLM text may only use numbers from the facts it was shown, gates on the PAT's path, entities present in the user's text, and the true time left. Rejected output retries once (advisor summary) or falls back to a template.
+- `monitor_graph.policy_check` overrides the LLM: no alerts for on-track PATs, critical PATs always notify at least the submitter, escalation only when critical and after `interrupt()` confirmation, cooldowns and coverage hours. The LLM may rate health one level worse than the statistics, never better.
+- `pat_config.json`: gates, gate paths, coverage hours, thresholds, monitor and advisor action catalogues (the LLM's choices are `Literal`s built from these).
+- `repository.py`: `MongoPatRepository` (collections `pat_history`, `pat_requests`, `pat_gate_events`, `pat_interventions`) when `MONGODB_URI` is set, else `InMemoryPatRepository`, which the API auto-seeds.
+- `notify.py`: delivery is a stub (`LogNotifier`); a future Teams notifier implements `Notifier`.
+- All PAT LLM calls go through `pat/llm.py` (`invoke_structured`, `bind_tools`); model set by `PAT_LLM_PROVIDER`/`PAT_LLM_MODEL`. Tests patch `pat.llm.llm` with `tests/pat_fakes.FakeLLM`, which answers by schema class name and can script tool calls.
 
 ### Checkpointing
 

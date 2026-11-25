@@ -5,8 +5,10 @@ from fastapi import FastAPI, HTTPException
 from chat_graph import get_chat_state, resume_chat, start_chat
 from chat_models import ChatMessageRequest, ChatRequest
 from chat_response import ChatResponse
+from pat.api import router as pat_router
 
 app = FastAPI(title="LangGraph Chat Companion API")
+app.include_router(pat_router)
 
 
 def _response_status(interrupt_kind: str) -> str:
