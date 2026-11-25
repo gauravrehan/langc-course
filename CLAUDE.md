@@ -27,7 +27,7 @@ A FastAPI service that turns a natural-language request from a web app screen in
 - `chat_graph.py`: the LangGraph `StateGraph` (flow diagram in `langgraph_workflow.mmd`; keep it in sync when changing edges). Nodes: `identify_tool` → (`clarify_tool` | `unsupported` | `parse_parameters`) → `decide_next_step` → (`collect_missing_parameters` | `confirm`) → `classify_confirmation` → (`prepare_command` | `cancel` | `give_up`). Human-in-the-loop steps use `interrupt()` with a payload dict (`kind`, `message`, `action`, `parameters`, `missingParameters`); resume via `Command(resume={"message": ...})`.
 - `chat_models.py` / `chat_response.py`: Pydantic request/response models. The `ChatResponse.status` `Literal` must include every status a node can set.
 - `tools_config.json`: the per-screen tool catalogue, re-read from disk on each `identify_tool` call. Tools have `intentExamples`, `negativeExamples`, `requiredParameters` (with optional `pattern`, `aliases`, `items` for `array` types, and `evidenceMatch`), and `uiFunction`. Adding a tool or screen is normally a config-only change.
-- `learn/`: standalone LangGraph/LangChain tutorial scripts, not used by the app.
+- `learn/`: **off-limits.** Personal tutorial scripts unrelated to the app. Never read, search, or modify anything in it (including via Bash such as `cat`, `grep`, `sed`), and never use it as context for any task. If a task seems to need it, ask the user first. `.claude/settings.json` also denies Read/Edit/Write on `learn/**`.
 
 ### LLM usage and validation
 
